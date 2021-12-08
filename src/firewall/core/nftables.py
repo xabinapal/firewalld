@@ -32,7 +32,12 @@ from firewall.core.rich import Rich_Accept, Rich_Reject, Rich_Drop, Rich_Mark, \
                                Rich_Masquerade, Rich_ForwardPort, Rich_IcmpBlock, \
                                Rich_Tcp_Mss_Clamp
 from firewall.core.base import DEFAULT_ZONE_TARGET
-from nftables.nftables import Nftables
+
+try:
+    from nftables.nftables import Nftables
+    HAS_NFTABLES = True
+except ImportError:
+    HAS_NFTABLES = False
 
 TABLE_NAME = "firewalld"
 TABLE_NAME_POLICY = TABLE_NAME + "_" + "policy_drop"

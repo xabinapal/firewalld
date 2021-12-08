@@ -76,19 +76,21 @@ class Firewall(object):
             self.ipset_supported_types = IPSET_TYPES
             self.nftables_enabled = False
         else:
-            self.ip4tables_backend = ipXtables.ip4tables(self)
             self.ip4tables_enabled = True
+            self.ip4tables_backend = ipXtables.ip4tables(self)
             self.ipv4_supported_icmp_types = [ ]
-            self.ip6tables_backend = ipXtables.ip6tables(self)
             self.ip6tables_enabled = True
+            self.ip6tables_backend = ipXtables.ip6tables(self)
             self.ipv6_supported_icmp_types = [ ]
-            self.ebtables_backend = ebtables.ebtables()
             self.ebtables_enabled = True
-            self.ipset_backend = ipset.ipset()
+            self.ebtables_backend = ebtables.ebtables()
             self.ipset_enabled = True
+            self.ipset_backend = ipset.ipset()
             self.ipset_supported_types = IPSET_TYPES
-            self.nftables_backend = nftables.nftables(self)
-            self.nftables_enabled = True
+
+            self.nftables_enabled = nftables.HAS_NFTABLES
+            if nftables.HAS_NFTABLES:
+                self.nftables_backend = nftables.nftables(self)
 
             self.modules_backend = modules.modules()
 
@@ -718,7 +720,11 @@ class Firewall(object):
         return (num_failed, error_msgs)
 
     def _select_firewall_backend(self, backend):
-        if backend != "nftables":
+        if backend == "nftables":
+            if not nftables.HAS_NFTABLES:
+                log.fatal("nftables python module is missing.")
+                sys.exit(1)
+        else:
             self.nftables_enabled = False
         # even if using nftables, the other backends are enabled for use with
         # the direct interface. nftables is used for the firewalld primitives.
