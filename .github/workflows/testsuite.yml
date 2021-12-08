@@ -15,6 +15,7 @@ jobs:
       python-${{ matrix.python-version }}
       nftables-${{ matrix.nftables-version }}
       keyword=${{ matrix.keyword }}
+      no-nftables=${{ matrix.no-nftables }}
       no-iptables=${{ matrix.no-iptables }}
       no-ip6tables=${{ matrix.no-ip6tables }}
 
@@ -27,23 +28,31 @@ jobs:
         libnftnl-version: [libnftnl-1.1.6]
         nftables-version: [v0.9.4]
         keyword: [offline, nftables, iptables]
+        no-nftables: [true, false]
         no-iptables: [true, false]
         no-ip6tables: [true, false]
         exclude:
           - keyword: offline
-            no-ip6tables: true
+            no-nftables: true
           - keyword: offline
             no-iptables: true
-          - keyword: iptables
-            no-iptables: true
+          - keyword: offline
+            no-ip6tables: true
+          - keyword: nftables
+            no-nftables: true
           - keyword: nftables
             no-iptables: true
             no-ip6tables: true
+          - keyword: iptables
+            no-nftables: false
+          - keyword: iptables
+            no-iptables: true
         include:
           - python-version: 3.7
             libnftnl-version: master
             nftables-version: master
             keyword: nftables
+            no-nftables: false
             no-iptables: false
             no-ip6tables: false
 
@@ -68,11 +77,13 @@ jobs:
           pip install ${{ env.pip-dependencies }}
 
       - name: install nftables build dependencies
+        if: ${{ ! matrix.no-nftables }}
         run: |
           sudo apt install -y libmnl-dev libgmp-dev libreadline-dev \
           libjansson-dev libedit-dev
 
       - name: install libnftnl ${{ matrix.libnftnl-version }}
+        if: ${{ ! matrix.no-nftables }}
         run: |
           cd /tmp
           git clone --depth=1 --branch ${{ matrix.libnftnl-version }} git://git.netfilter.org/libnftnl
@@ -84,6 +95,7 @@ jobs:
           sudo ldconfig
 
       - name: install nftables ${{ matrix.nftables-version }}
+        if: ${{ ! matrix.no-nftables }}
         run: |
           cd /tmp
           git clone --depth=1 --branch ${{ matrix.nftables-version }} git://git.netfilter.org/nftables
@@ -101,18 +113,18 @@ jobs:
         run: |
           sudo apt-get -y remove iptables ebtables ipset
 
-      - name: build firewalld (no ip6tables)
-        if: ${{ matrix.no-ip6tables }}
-        run: |
-          ./autogen.sh
-          ./configure --disable-docs IP6TABLES=/bin/false IP6TABLES_RESTORE=/bin/false
-          make -j $(nproc)
-
       - name: build firewalld
         if: ${{ ! matrix.no-ip6tables }}
         run: |
           ./autogen.sh
           ./configure --disable-docs
+          make -j $(nproc)
+
+      - name: build firewalld (no ip6tables)
+        if: ${{ matrix.no-ip6tables }}
+        run: |
+          ./autogen.sh
+          ./configure --disable-docs IP6TABLES=/bin/false IP6TABLES_RESTORE=/bin/false
           make -j $(nproc)
 
       - name: run testsuite
