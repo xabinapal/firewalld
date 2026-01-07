@@ -15,7 +15,11 @@ from firewall import config
 from firewall import functions
 from firewall.core import ipXtables
 from firewall.core import ebtables
-from firewall.core import nftables
+
+try:
+    from firewall.core import nftables
+except ImportError:
+    nftables = None
 from firewall.core import ipset
 from firewall.core import modules
 from firewall.core.fw_icmptype import FirewallIcmpType
@@ -61,7 +65,13 @@ class Firewall:
             self.ip6tables_backend = ipXtables.ip6tables(self)
             self.ebtables_backend = ebtables.ebtables()
             self.ipset_backend = ipset.ipset()
-            self.nftables_backend = nftables.nftables(self)
+            if nftables is not None:
+                try:
+                    self.nftables_backend = nftables.nftables(self)
+                except FirewallError:
+                    self.nftables_backend = None
+            else:
+                self.nftables_backend = None
             self.modules_backend = modules.modules()
 
         self.icmptype = FirewallIcmpType(self)
@@ -291,7 +301,7 @@ class Firewall:
                         "disabling IPv4 firewall."
                     )
                 self.ip4tables_enabled = False
-        if self.nftables_enabled:
+        if self.nftables_enabled and self.nftables_backend is not None:
             self.ipv4_supported_icmp_types = self.nftables_backend.supported_icmp_types(
                 "ipv4"
             )
@@ -321,7 +331,7 @@ class Firewall:
                         "disabling IPv6 firewall."
                     )
                 self.ip6tables_enabled = False
-        if self.nftables_enabled:
+        if self.nftables_enabled and self.nftables_backend is not None:
             self.ipv6_supported_icmp_types = self.nftables_backend.supported_icmp_types(
                 "ipv6"
             )
@@ -362,16 +372,17 @@ class Firewall:
                 "option, will therefore not be used"
             )
 
-        self.nftables_backend.probe_support()
+        if self.nftables_backend is not None:
+            self.nftables_backend.probe_support()
 
-        if (
-            self._nftables_table_owner
-            and not self.nftables_backend.supports_table_owner
-        ):
-            log.info1(
-                "Configuration has NftablesTableOwner=True, but it's "
-                "not supported by nftables. Table ownership will be disabled."
-            )
+            if (
+                self._nftables_table_owner
+                and not self.nftables_backend.supports_table_owner
+            ):
+                log.info1(
+                    "Configuration has NftablesTableOwner=True, but it's "
+                    "not supported by nftables. Table ownership will be disabled."
+                )
 
     def _start_load_firewalld_conf(self):
         # load firewalld config
@@ -655,6 +666,15 @@ class Firewall:
             else:
                 backend_to_check = self._firewall_backend
             if not self.is_backend_enabled(backend_to_check):
+                if (
+                    self._firewall_backend == "nftables"
+                    and self.nftables_backend is None
+                ):
+                    raise FirewallError(
+                        errors.UNKNOWN_ERROR,
+                        "Firewall backend 'nftables' is not available. "
+                        "python3-nftables is not installed.",
+                    )
                 raise FirewallError(
                     errors.UNKNOWN_ERROR,
                     "Firewall backend '{}' is not available.".format(
@@ -937,7 +957,7 @@ class Firewall:
         raise FirewallError(errors.UNKNOWN_ERROR, "'%s' backend does not exist" % name)
 
     def get_backend_by_ipv(self, ipv):
-        if self.nftables_enabled:
+        if self.nftables_enabled and self.nftables_backend is not None:
             return self.nftables_backend
         if ipv == "ipv4" and self.ip4tables_enabled:
             return self.ip4tables_backend
@@ -984,7 +1004,7 @@ class Firewall:
 
     def enabled_backends(self):
         backends = []
-        if self.nftables_enabled:
+        if self.nftables_enabled and self.nftables_backend is not None:
             backends.append(self.nftables_backend)
         else:
             if self.ip4tables_enabled:
@@ -1003,7 +1023,7 @@ class Firewall:
             backends.append(self.ip6tables_backend)
         if self.ebtables_enabled:
             backends.append(self.ebtables_backend)
-        if self.nftables_enabled:
+        if self.nftables_enabled and self.nftables_backend is not None:
             backends.append(self.nftables_backend)
         return backends
 
@@ -1071,9 +1091,11 @@ class Firewall:
             log.debug1(
                 "Setting policy to '%s'%s",
                 policy,
-                f" (ReloadPolicy={firewalld_conf._unparse_reload_policy(policy_details)})"
-                if policy == "DROP"
-                else "",
+                (
+                    f" (ReloadPolicy={firewalld_conf._unparse_reload_policy(policy_details)})"
+                    if policy == "DROP"
+                    else ""
+                ),
             )
 
             for backend in self.enabled_backends():
@@ -1320,7 +1342,7 @@ class Firewall:
         # If the FirewallBackend changed, then we must also cleanup the policy
         # for the old backend that was set to DROP above.
         if not self._panic and old_firewall_backend != self._firewall_backend:
-            if old_firewall_backend == "nftables":
+            if old_firewall_backend == "nftables" and self.nftables_backend is not None:
                 for rule in self._set_policy_build_rules(
                     self.nftables_backend, "ACCEPT"
                 ):

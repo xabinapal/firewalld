@@ -41,7 +41,11 @@ from firewall.core.rich import (
 )
 from firewall.core.base import DEFAULT_ZONE_TARGET
 from firewall.core.icmp import ICMP_TYPES, ICMPV6_TYPES
-from nftables.nftables import Nftables
+
+try:
+    from nftables.nftables import Nftables
+except ImportError:
+    Nftables = None
 
 TABLE_NAME = "firewalld"
 TABLE_NAME_POLICY = TABLE_NAME + "_" + "policy_drop"
@@ -96,6 +100,11 @@ class nftables:
     policies_supported = True
 
     def __init__(self, fw):
+        if Nftables is None:
+            raise FirewallError(
+                UNKNOWN_ERROR,
+                "python3-nftables is not available. Install python3-nftables to use the nftables backend.",
+            )
         self._fw = fw
         self.restore_command_exists = True
         self.supports_table_owner = False
