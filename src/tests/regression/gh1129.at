@@ -16,6 +16,7 @@ FWD_END_TEST()
 m4_if(iptables, FIREWALL_BACKEND, [
 FWD_START_TEST([switch backend to nftables and reload])
 AT_KEYWORDS(gh1129)
+AT_SKIP_IF([! NS_CMD([command -v nft >/dev/null 2>&1])])
 AT_SKIP_IF([! NS_CMD([command -v iptables-save >/dev/null 2>&1])])
 
 AT_CHECK([sed -i 's/^FirewallBackend.*/FirewallBackend=nftables/' ./firewalld.conf])
