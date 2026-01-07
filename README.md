@@ -46,7 +46,6 @@ These are the runtime dependencies:
   python >= 3.8
   python3-dbus
   python3-gobject
-  python3-nftables >= 0.9.4
 ```
 
 **Note**: python2 is _not_ supported.
@@ -63,7 +62,12 @@ required.
   iptables
   polkit
   python3-capng (libcap-ng-python3)
+  python3-nftables >= 0.9.4
 ```
+
+**Note**: at least one of `iptables` and `python3-nftables` must be present
+so that `firewalld` can start. This depends on the backend used on the
+`FirewallBackend` configuration setting.
 
 Working With The Source Repository
 ----------------------------------
